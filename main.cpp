@@ -1,10 +1,13 @@
 #include <Wire.h> // Library for I2C communication
 #include <LiquidCrystal_I2C.h> // Library for LC
 #include <EEPROM.h> // Library for Eeprom
+#include <DS3232RTC.h> // Library for RTC DS3231
+#include <avr/sleep.h> // Library for the sleep mode
 
 // #define SIZEOF_ARRAY(a) (sizeof(a) / sizeof( a[0] ))
 
 /** Digital Pins */
+const byte _alarmInterrupt = 2;
 const byte _buttonInterrupt = 3;
 const byte _pump = 4;
 const byte _valve1 = 5;
@@ -109,6 +112,7 @@ byte subMenuPos = 0;
 bool subMenu = false;
 unsigned long backlightStart = 0;
 unsigned long warningLedStart = 0;
+unsigned long wateringStart = 0;
 
 /** Read which button have been pressed */
 void readButtons() {
@@ -134,6 +138,11 @@ void readButtons() {
     lastInterruptTime = interruptTime;
 }
 
+/** Wake up the Atmega */
+void wakeUp() {
+    // Nothing to do for the moment
+}
+
 void setup() {
     Serial.begin(9600);
 
@@ -152,6 +161,7 @@ void setup() {
     pinMode(_menuPlus, INPUT);
 
     // Interrupt pins
+    attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), wakeUp, RISING);
     attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, RISING);
 
     // Init values
@@ -293,7 +303,12 @@ void handleSubMenus(const sub_menu_type *subMenu) {
 
     lcd.setCursor(0, 1);
     if (subMenu[subMenuPos].type == 0) {
+        if (menus == 3 || menus == 4) {
+            getTimeValues();
+        }
+
         lcd.print(*(subMenu[subMenuPos].value));
+
         if (menusPos == 2) {
             readMoistureSensors();
             lcd.setCursor(12, 1);
@@ -375,11 +390,43 @@ void loadParameters() {
 /** Set the time on the DS3231 */
 void setTime() {
 
+    tmElements_t tm;
+    tm.Hour = hour;
+    tm.Minute = minutes;
+    tm.Second = 00;
+    tm.Day = 1;
+    tm.Month = 1;
+    tm.Year = 2019 ;
+    RTC.write(tm);
+}
+
+/** Set global values for the time in the menu */
+void getTimeValues() {
+    hour = 0;
+    minutes = 0;
+    clockHour = 0;
+    clockMinutes = 0;
+    clockState = 0;
 }
 
 /** Set the clock on the DS3231 */
 void setClock() {
 
+    RTC.setAlarm(ALM1_MATCH_HOURS, 0, clockMinutes, clockHour, 0);
+    RTC.alarm(ALARM_1);
+    RTC.squareWave(SQWAVE_NONE);
+    RTC.alarmInterrupt(ALARM_1, true);
+}
+
+//** Put the Atmega in sleep mode */
+void goSleep() {
+
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    sleep_enable();
+    attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), wakeUp, RISING);
+    sleep_mode();
+    sleep_disable();
+    detachInterrupt(digitalPinToInterrupt(_alarmInterrupt));
 }
 
 //////////////////////////////////////////////////////////
@@ -393,10 +440,21 @@ void setClock() {
 /** Water zones */
 void handleWater() {
 
+    // Init the starting time of watering
+    if (wateringStart == 0) {
+        wateringStart = millis();
+    }
+
     readMoistureSensors();
 
     if (readWaterLevelSensor() == LOW || !waterSensor) {
         digitalWrite(_warningLed, LOW);
+
+        // Time limit of watering
+        if ((millis() - wateringStart) > (limit * 60000)) {
+            wateringStart = 0;
+            goSleep();
+        }
 
         if (zone1 == true && measures[0] < sensorZone1) {
             digitalWrite(_pump, LOW);
@@ -412,9 +470,10 @@ void handleWater() {
             digitalWrite(_valve4, LOW);
         } else {
             stopAll();
+            goSleep();
         }
     } else {
-        // warning led blinking
+        // Warning led blinking
         if ((millis() - warningLedStart) > 1000) {
             digitalWrite(_warningLed, !digitalRead(_warningLed));
             warningLedStart = millis();
