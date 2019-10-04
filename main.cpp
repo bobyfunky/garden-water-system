@@ -3,6 +3,8 @@
 #include <EEPROM.h> // Library for Eeprom
 #include <DS3232RTC.h> // Library for RTC DS3231
 #include <avr/sleep.h> // Library for the sleep mode
+#include <Time.h>
+#include <TimeLib.h>
 
 // #define SIZEOF_ARRAY(a) (sizeof(a) / sizeof( a[0] ))
 
@@ -41,8 +43,8 @@ byte sensorZone1;
 byte sensorZone2;
 byte sensorZone3;
 byte sensorZone4;
-byte hour;
-byte minutes;
+byte menuHour;
+byte menuMinutes;
 byte clockHour;
 byte clockMinutes;
 byte clockState;
@@ -75,11 +77,11 @@ sub_menu_type menuSensors[] = {{ NULL, "Back...", 2, NULL},
                                 { 9, "Zone 3", 0, &sensorZone3},
                                 { 10, "Zone 4", 0, &sensorZone4}};
 sub_menu_type menuTime[] = {{ NULL, "Back...", 2, NULL},
-                            { 11, "Hour", 0, &hour},
-                            { 12, "Minutes", 0, &minutes}};
+                            { 11, "menuHour", 0, &menuHour},
+                            { 12, "menuMinutes", 0, &menuMinutes}};
 sub_menu_type menuClock[] = {{ NULL, "Back...", 2, NULL},
-                                { 13, "Hour", 0, &clockHour},
-                                { 14, "Minutes", 0, &clockMinutes},
+                                { 13, "menuHour", 0, &clockHour},
+                                { 14, "menuMinutes", 0, &clockMinutes},
                                 { 15, "State", 1, &clockState}};
 sub_menu_type menuDelay[] = {{ NULL, "Back...", 2, NULL},
                                 { 16, "Limit", 0, &limit}};
@@ -110,6 +112,7 @@ volatile byte currentButton = 0;
 byte menusPos = 0;
 byte subMenuPos = 0;
 bool subMenu = false;
+bool interactMode = true;
 unsigned long backlightStart = 0;
 unsigned long warningLedStart = 0;
 unsigned long wateringStart = 0;
@@ -159,6 +162,7 @@ void setup() {
     pinMode(_menuButton, INPUT);
     pinMode(_menuMinus, INPUT);
     pinMode(_menuPlus, INPUT);
+    pinMode(_buttonInterrupt, INPUT_PULLUP);
 
     // Interrupt pins
     attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), wakeUp, RISING);
@@ -175,6 +179,16 @@ void setup() {
     lcd.init();
     lcd.backlight();
     displayScreen();
+
+    // Init alarm
+    RTC.setAlarm(ALM1_MATCH_DATE, 0, 0, 0, 1);
+    RTC.setAlarm(ALM2_MATCH_DATE, 0, 0, 0, 1);
+    RTC.alarm(ALARM_1);
+    RTC.alarm(ALARM_2);
+    RTC.alarmInterrupt(ALARM_1, false);
+    RTC.alarmInterrupt(ALARM_2, false);
+    RTC.squareWave(SQWAVE_NONE);
+    setClock();
 }
 
 /** Main loop */
@@ -189,9 +203,14 @@ void loop(){
     if ((millis() - backlightStart) > 20000) {
         lcd.noDisplay();
         lcd.noBacklight();
+        interactMode = false;
+        goSleep();
     }
 
-    handleWater();
+    // Wait the interactions are finished before handle the watering
+    if (interactMode == false) {
+        handleWater();
+    }
 }
 
 //////////////////////////////////////////////////////////
@@ -200,6 +219,8 @@ void loop(){
 
 /** Handle button menu */
 void handleButtonMenu() {
+    interactMode = true;
+
     if (subMenu == false) {
         menusPos++;
         if (menusPos >= 8) {
@@ -303,9 +324,9 @@ void handleSubMenus(const sub_menu_type *subMenu) {
 
     lcd.setCursor(0, 1);
     if (subMenu[subMenuPos].type == 0) {
-        if (menus == 3 || menus == 4) {
-            getTimeValues();
-        }
+        // if (menus == 3 || menus == 4) {
+        //     getTimeValues();
+        // }
 
         lcd.print(*(subMenu[subMenuPos].value));
 
@@ -343,8 +364,8 @@ void resetParameters() {
     sensorZone2 = 50;
     sensorZone3 = 50;
     sensorZone4 = 50;
-    hour = 0;
-    minutes = 0;
+    menuHour = 0;
+    menuMinutes = 0;
     clockHour = 0;
     clockMinutes = 0;
     clockState = 0;
@@ -365,6 +386,8 @@ void saveParameters() {
             }
         }
     }
+    setTime();
+    setClock();
 }
 
 /** Read all parameters from the Eeprom */
@@ -391,30 +414,33 @@ void loadParameters() {
 void setTime() {
 
     tmElements_t tm;
-    tm.Hour = hour;
-    tm.Minute = minutes;
-    tm.Second = 00;
-    tm.Day = 1;
     tm.Month = 1;
-    tm.Year = 2019 ;
-    RTC.write(tm);
+    tm.Day = 1;
+    tm.Year = 2019 - 1970;
+    tm.Hour = menuHour;
+    tm.Minute = menuMinutes;
+    tm.Second = 0;
+
+    time_t t = makeTime(tm);
+    RTC.set(t);
 }
 
 /** Set global values for the time in the menu */
-void getTimeValues() {
-    hour = 0;
-    minutes = 0;
-    clockHour = 0;
-    clockMinutes = 0;
-    clockState = 0;
-}
+// void getTimeValues() {
+//     time_t myTime;
+//     myTime = RTC.get();
+//     menuHour = _DEC(menuHour(t);
+//     menuMinutes = _DEC(minute(t);
+//     clockHour = 0;
+//     clockMinutes = 0;
+//     clockState = 0;
+// }
 
 /** Set the clock on the DS3231 */
 void setClock() {
 
     RTC.setAlarm(ALM1_MATCH_HOURS, 0, clockMinutes, clockHour, 0);
     RTC.alarm(ALARM_1);
-    RTC.squareWave(SQWAVE_NONE);
     RTC.alarmInterrupt(ALARM_1, true);
 }
 
@@ -423,10 +449,9 @@ void goSleep() {
 
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
     sleep_enable();
-    attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), wakeUp, RISING);
     sleep_mode();
     sleep_disable();
-    detachInterrupt(digitalPinToInterrupt(_alarmInterrupt));
+    RTC.alarm(ALARM_1);
 }
 
 //////////////////////////////////////////////////////////
