@@ -481,18 +481,15 @@ void handleWater() {
             goSleep();
         }
 
-        if (zone1 == true && measures[0] < sensorZone1) {
+        if ((zone1 == true && measures[0] < sensorZone1) 
+            || (zone2 == true && measures[1] < sensorZone2) 
+            || (zone3 == true && measures[2] < sensorZone3) 
+            || (zone4 == true && measures[3] < sensorZone4)) {
             digitalWrite(_pump, LOW);
-            digitalWrite(_valve1, LOW);
-        } else if (zone2 == true && measures[1] < sensorZone2) {
-            digitalWrite(_pump, LOW);
-            digitalWrite(_valve2, LOW);
-        } else if (zone3 == true && measures[2] < sensorZone3) {
-            digitalWrite(_pump, LOW);
-            digitalWrite(_valve3, LOW);
-        } else if (zone4 == true && measures[3] < sensorZone4) {
-            digitalWrite(_pump, LOW);
-            digitalWrite(_valve4, LOW);
+            handleZone(_valve1, zone1 == true && measures[0] < sensorZone1);
+            handleZone(_valve1, zone2 == true && measures[1] < sensorZone2);
+            handleZone(_valve2, zone3 == true && measures[2] < sensorZone3);
+            handleZone(_valve4, zone4 == true && measures[3] < sensorZone4);
         } else {
             stopAll();
             wateringStart = 0;
@@ -506,6 +503,16 @@ void handleWater() {
         }
         stopAll();
         wateringStart = 0;
+    }
+}
+
+/** Active/Desactive valves */
+void handleZone(const byte valve, const bool state) {
+
+    if (state) {
+        digitalWrite(_valve1, LOW);
+    } else {
+        digitalWrite(_valve1, HIGH);
     }
 }
 
