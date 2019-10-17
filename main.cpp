@@ -495,6 +495,7 @@ void handleWater() {
             digitalWrite(_valve4, LOW);
         } else {
             stopAll();
+            wateringStart = 0;
             goSleep();
         }
     } else {
@@ -504,6 +505,7 @@ void handleWater() {
             warningLedStart = millis();
         }
         stopAll();
+        wateringStart = 0;
     }
 }
 
