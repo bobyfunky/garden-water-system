@@ -11,11 +11,11 @@ const byte _valve1 = 5;
 const byte _valve2 = 6;
 const byte _valve3 = 7;
 const byte _valve4 = 8;
-const byte _warningLed = 9;
-const byte _waterLevelSensor = 10;
-const byte _menuButton = 11;
-const byte _menuMinus = 12;
-const byte _menuPlus = 13;
+const byte _waterLevelSensor = 9;
+const byte _menuButton = 10;
+const byte _menuMinus = 11;
+const byte _menuPlus = 12;
+const byte _warningLed = 13;
 
 /** Analog Pins*/
 const byte _moistureSensor1 = A0;
@@ -123,13 +123,13 @@ void readButtons() {
 
         // Handle button Menu
         int val = digitalRead(_menuButton);
-        currentButton = val == HIGH ? 0 : currentButton;
+        currentButton = val == LOW ? 0 : currentButton;
         // Handle button Plus
         val = digitalRead(_menuPlus);
-        currentButton = val == HIGH ? 1 : currentButton;
+        currentButton = val == LOW ? 1 : currentButton;
         // Handle button Minus
         val = digitalRead(_menuMinus);
-        currentButton = val == HIGH ? 2 : currentButton;
+        currentButton = val == LOW ? 2 : currentButton;
     }
     lastInterruptTime = interruptTime;
 }
@@ -146,13 +146,14 @@ void setup() {
     pinMode(_warningLed, OUTPUT);
 
     // Input pins
-    pinMode(_waterLevelSensor, INPUT);
-    pinMode(_menuButton, INPUT);
-    pinMode(_menuMinus, INPUT);
-    pinMode(_menuPlus, INPUT);
+    pinMode(_waterLevelSensor, INPUT_PULLUP);
+    pinMode(_menuButton, INPUT_PULLUP);
+    pinMode(_menuMinus, INPUT_PULLUP);
+    pinMode(_menuPlus, INPUT_PULLUP);
+    pinMode(_buttonInterrupt, INPUT_PULLUP);
 
     // Interrupt pins
-    attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, RISING);
+    attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, LOW);
 
     // Init values
     digitalWrite(_warningLed, LOW);
@@ -377,7 +378,7 @@ void handleWater() {
 
     readMoistureSensors();
 
-    if (readWaterLevelSensor() == LOW || !waterSensor) {
+    if (readWaterLevelSensor() == HIGH || !waterSensor) {
         digitalWrite(_warningLed, LOW);
 
         if (zone1 == true && measures[0] < sensorZone1) {
