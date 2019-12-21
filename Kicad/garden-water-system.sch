@@ -25,17 +25,6 @@ F 3 "http://ww1.microchip.com/downloads/en/DeviceDoc/ATmega328_P%20AVR%20MCU%20w
 	1    0    0    -1  
 $EndComp
 $Comp
-L Regulator_Linear:LM7805_TO220 U2
-U 1 1 5DF07E37
-P 9400 2550
-F 0 "U2" H 9400 2699 50  0000 C CNN
-F 1 "LM7805_TO220" H 9400 2790 50  0000 C CNN
-F 2 "Package_TO_SOT_SMD:TO-252-2" H 9400 2775 50  0001 C CIN
-F 3 "http://www.fairchildsemi.com/ds/LM/LM7805.pdf" H 9400 2500 50  0001 C CNN
-	1    9400 2550
-	-1   0    0    1   
-$EndComp
-$Comp
 L Connector:Jack-DC J13
 U 1 1 5DF0DE95
 P 10550 2350
@@ -1036,4 +1025,15 @@ Wire Wire Line
 Connection ~ 10600 1800
 Wire Wire Line
 	10600 1800 10850 1800
+$Comp
+L Regulator_Linear:AMS1117-5.0 U2
+U 1 1 5DFFAF2F
+P 9400 2550
+F 0 "U2" H 9400 2699 50  0000 C CNN
+F 1 "AMS1117-5.0" H 9400 2790 50  0000 C CNN
+F 2 "Package_TO_SOT_SMD:SOT-223-3_TabPin2" H 9400 2750 50  0001 C CNN
+F 3 "http://www.advanced-monolithic.com/pdf/ds1117.pdf" H 9500 2300 50  0001 C CNN
+	1    9400 2550
+	-1   0    0    1   
+$EndComp
 $EndSCHEMATC
