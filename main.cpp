@@ -399,7 +399,7 @@ void saveParameters() {
 
     for  (int i = 0; i < 9; i++) {
         for (int j = 0; j < menus[i].length; j++) {
-            if (menus[i].subMenu[j].type != 2 && menus[i].address != 3) {
+            if (menus[i].subMenu[j].type != 2 && i != 3) {
                 EEPROM.update(menus[i].subMenu[j].address, *(menus[i].subMenu[j].value));
             }
         }
@@ -445,8 +445,8 @@ void setTime() {
 void getTimeValues() {
     time_t myTime;
     myTime = RTC.get();
-    menuHour = _DEC(hour(t));
-    menuMinutes = _DEC(minute(t));
+    menuHour = hour(myTime);
+    menuMinutes = minute(myTime);
 }
 
 /** Set the clock on the DS3231 */
@@ -494,16 +494,16 @@ void handleWater() {
             goSleep();
         }
 
-        if (valve == true && (zone1 == true && measures[0] < sensorZone1) 
-            || (zone2 == true && measures[1] < sensorZone2) 
-            || (zone3 == true && measures[2] < sensorZone3) 
+        if (valve == true && (zone1 == true && measures[0] < sensorZone1)
+            || (zone2 == true && measures[1] < sensorZone2)
+            || (zone3 == true && measures[2] < sensorZone3)
             || (zone4 == true && measures[3] < sensorZone4)) {
             digitalWrite(_pump, HIGH);
             handleZone(_valve1, zone1 == true && measures[0] < sensorZone1);
             handleZone(_valve1, zone2 == true && measures[1] < sensorZone2);
             handleZone(_valve2, zone3 == true && measures[2] < sensorZone3);
             handleZone(_valve4, zone4 == true && measures[3] < sensorZone4);
-        } else if () {
+        } else if (pump == true) {
             digitalWrite(_pump, HIGH);
         } else {
             stopAll();
@@ -565,22 +565,22 @@ void stopAll() {
 void executeTest() {
     stopAll();
     digitalWrite(_warningLed, HIGH);
-    sleep(2000);
+    delay(2000);
     digitalWrite(_warningLed, LOW);
     digitalWrite(_pump, HIGH);
-    sleep(2000);
+    delay(2000);
     digitalWrite(_pump, LOW);
     digitalWrite(_valve1, HIGH);
-    sleep(2000);
+    delay(2000);
     digitalWrite(_valve1, LOW);
     digitalWrite(_valve2, HIGH);
-    sleep(2000);
+    delay(2000);
     digitalWrite(_valve2, LOW);
     digitalWrite(_valve3, HIGH);
-    sleep(2000);
+    delay(2000);
     digitalWrite(_valve3, LOW);
     digitalWrite(_valve4, HIGH);
-    sleep(2000);
+    delay(2000);
     stopAll();
 }
 
