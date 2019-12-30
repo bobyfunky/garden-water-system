@@ -490,6 +490,7 @@ void handleWater() {
 
         // Time limit of watering
         if ((millis() - wateringStart) > (limit * 60000)) {
+            stopAll();
             wateringStart = 0;
             goSleep();
         }
