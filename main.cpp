@@ -113,6 +113,7 @@ volatile byte currentButton = 0;
 byte menusPos = 0;
 byte subMenuPos = 0;
 bool subMenu = false;
+bool editing = false;
 bool interactMode = true;
 bool testMode = false;
 unsigned long backlightStart = 0;
@@ -201,6 +202,7 @@ void loop(){
         handleInput();
     }
 
+    // True if the a test is running
     if (testMode) {
         executeTest();
     } else {
@@ -245,6 +247,11 @@ void handleButtonMenu() {
 void handleButtonPlus() {
     if (subMenu) {
         if (subMenuPos == 0) {
+            // When exit the time or clock submenu then set the values on the DS3231 board
+            if (menusPos == 3 || menusPos == 4) {
+                setTime();
+                setClock();
+            }
             subMenu = false;
         } else if (menus[menusPos].subMenu[subMenuPos].type == 0) {
             *(menus[menusPos].subMenu[subMenuPos].value) += 1;
@@ -260,6 +267,8 @@ void handleButtonPlus() {
             testMode = !testMode;
         } else {
             subMenu = true;
+            editing = false;
+            subMenu = 0;
         }
     }
     displayScreen();
@@ -332,9 +341,9 @@ void handleSubMenus(const sub_menu_type *subMenu) {
 
     lcd.setCursor(0, 1);
     if (subMenu[subMenuPos].type == 0) {
-        // if (menus == 3 || menus == 4) {
-        //     getTimeValues();
-        // }
+        if (editing != true && (menusPos == 3 || menusPos == 4)) {
+            getTimeValues();
+        }
 
         lcd.print(*(subMenu[subMenuPos].value));
 
@@ -359,6 +368,7 @@ void resetParameters() {
     menusPos = 0;
     subMenuPos = 0;
     subMenu = false;
+    editing = false;
 
     // Variables
     pump = 0;
@@ -387,21 +397,19 @@ void resetParameters() {
 /** Update all parameters in the Eeprom */
 void saveParameters() {
 
-    for  (int i = 0; i < 8; i++) {
+    for  (int i = 0; i < 9; i++) {
         for (int j = 0; j < menus[i].length; j++) {
-            if (menus[i].subMenu[j].address != 2) {
+            if (menus[i].subMenu[j].type != 2 && menus[i].address != 3) {
                 EEPROM.update(menus[i].subMenu[j].address, *(menus[i].subMenu[j].value));
             }
         }
     }
-    setTime();
-    setClock();
 }
 
 /** Read all parameters from the Eeprom */
 void loadParameters() {
 
-    for  (int i = 0; i < 8; i++) {
+    for  (int i = 0; i < 9; i++) {
         for (int j = 0; j < menus[i].length; j++) {
             if (menus[i].subMenu[j].type != 2) {
                 *(menus[i].subMenu[j].value) = EEPROM.read(menus[i].subMenu[j].address);
@@ -434,15 +442,12 @@ void setTime() {
 }
 
 /** Set global values for the time in the menu */
-// void getTimeValues() {
-//     time_t myTime;
-//     myTime = RTC.get();
-//     menuHour = _DEC(menuHour(t);
-//     menuMinutes = _DEC(minute(t);
-//     clockHour = 0;
-//     clockMinutes = 0;
-//     clockState = 0;
-// }
+void getTimeValues() {
+    time_t myTime;
+    myTime = RTC.get();
+    menuHour = _DEC(hour(t));
+    menuMinutes = _DEC(minute(t));
+}
 
 /** Set the clock on the DS3231 */
 void setClock() {
@@ -520,9 +525,9 @@ void handleWater() {
 void handleZone(const byte valve, const bool state) {
 
     if (state) {
-        digitalWrite(_valve1, LOW);
-    } else {
         digitalWrite(_valve1, HIGH);
+    } else {
+        digitalWrite(_valve1, LOW);
     }
 }
 
@@ -541,13 +546,44 @@ int readWaterLevelSensor() {
 
 /** Stop all systems */
 void stopAll() {
-    digitalWrite(_pump, HIGH);
-    digitalWrite(_valve1, HIGH);
-    digitalWrite(_valve2, HIGH);
-    digitalWrite(_valve3, HIGH);
-    digitalWrite(_valve4, HIGH);
+    digitalWrite(_pump, LOW);
+    digitalWrite(_valve1, LOW);
+    digitalWrite(_valve2, LOW);
+    digitalWrite(_valve3, LOW);
+    digitalWrite(_valve4, LOW);
 }
 
 //////////////////////////////////////////////////////////
 //                    STOP WATER                        //
+//////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////
+//                    START TESTS                       //
+//////////////////////////////////////////////////////////
+
+/** Test hardwares connections */
+void executeTest() {
+    stopAll();
+    digitalWrite(_warningLed, HIGH);
+    sleep(2000);
+    digitalWrite(_warningLed, LOW);
+    digitalWrite(_pump, HIGH);
+    sleep(2000);
+    digitalWrite(_pump, LOW);
+    digitalWrite(_valve1, HIGH);
+    sleep(2000);
+    digitalWrite(_valve1, LOW);
+    digitalWrite(_valve2, HIGH);
+    sleep(2000);
+    digitalWrite(_valve2, LOW);
+    digitalWrite(_valve3, HIGH);
+    sleep(2000);
+    digitalWrite(_valve3, LOW);
+    digitalWrite(_valve4, HIGH);
+    sleep(2000);
+    stopAll();
+}
+
+//////////////////////////////////////////////////////////
+//                    STOP TESTS                        //
 //////////////////////////////////////////////////////////
