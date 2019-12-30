@@ -16,11 +16,11 @@ const byte _valve1 = 5;
 const byte _valve2 = 6;
 const byte _valve3 = 7;
 const byte _valve4 = 8;
-const byte _warningLed = 9;
-const byte _waterLevelSensor = 10;
-const byte _menuButton = 11;
-const byte _menuMinus = 12;
-const byte _menuPlus = 13;
+const byte _waterLevelSensor = 9;
+const byte _menuButton = 10;
+const byte _menuMinus = 11;
+const byte _menuPlus = 12;
+const byte _warningLed = 13;
 
 /** Analog Pins*/
 const byte _moistureSensor1 = A0;
@@ -52,8 +52,8 @@ byte limit;
 
 /** Eeprom's address,
     Parameter's name,
-    Parameter's type (0: value, 1: ON/OFF, 2: menu item),
-    Parameter's value  */
+    Parameter's type (0: value, 1: ON/OFF, 2: menu back),
+    Parameter's value pointer  */
 typedef struct
 {
     byte address;
@@ -95,14 +95,15 @@ typedef struct
     byte length;
 } menu_type;
 
-menu_type menus[8] = {{"Hardwares", menuHardware, 4},
+menu_type menus[9] = {{"Hardwares", menuHardware, 4},
                         {"Zones", menuZones, 5},
                         {"Sensors", menuSensors, 5},
                         {"Time", menuTime, 3},
                         {"Clock", menuClock, 4},
                         {"Delay", menuDelay, 2},
                         {"Save", NULL, NULL},
-                        {"Reset", NULL, NULL}};
+                        {"Reset", NULL, NULL},
+                        {"Launch tests", NULL, NULL}};
 
 byte measures[4] = {0, 0, 0, 0};
 
@@ -113,6 +114,7 @@ byte menusPos = 0;
 byte subMenuPos = 0;
 bool subMenu = false;
 bool interactMode = true;
+bool testMode = false;
 unsigned long backlightStart = 0;
 unsigned long warningLedStart = 0;
 unsigned long wateringStart = 0;
@@ -130,13 +132,13 @@ void readButtons() {
 
         // Handle button Menu
         int val = digitalRead(_menuButton);
-        currentButton = val == HIGH ? 0 : currentButton;
+        currentButton = val == LOW ? 0 : currentButton;
         // Handle button Plus
         val = digitalRead(_menuPlus);
-        currentButton = val == HIGH ? 1 : currentButton;
+        currentButton = val == LOW ? 1 : currentButton;
         // Handle button Minus
         val = digitalRead(_menuMinus);
-        currentButton = val == HIGH ? 2 : currentButton;
+        currentButton = val == LOW ? 2 : currentButton;
     }
     lastInterruptTime = interruptTime;
 }
@@ -158,22 +160,22 @@ void setup() {
     pinMode(_warningLed, OUTPUT);
 
     // Input pins
-    pinMode(_waterLevelSensor, INPUT);
-    pinMode(_menuButton, INPUT);
-    pinMode(_menuMinus, INPUT);
-    pinMode(_menuPlus, INPUT);
+    pinMode(_waterLevelSensor, INPUT_PULLUP);
+    pinMode(_menuButton, INPUT_PULLUP);
+    pinMode(_menuMinus, INPUT_PULLUP);
+    pinMode(_menuPlus, INPUT_PULLUP);
     pinMode(_buttonInterrupt, INPUT_PULLUP);
 
     // Interrupt pins
     attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), wakeUp, RISING);
-    attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, RISING);
+    attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, LOW);
 
     // Init values
     digitalWrite(_warningLed, LOW);
     stopAll();
 
     // Load Settings
-   loadParameters();
+    loadParameters();
 
     // Initiate the LCD
     lcd.init();
@@ -199,17 +201,21 @@ void loop(){
         handleInput();
     }
 
-    // Turn off backlight after 20s
-    if ((millis() - backlightStart) > 20000) {
-        lcd.noDisplay();
-        lcd.noBacklight();
-        interactMode = false;
-        goSleep();
-    }
+    if (testMode) {
+        executeTest();
+    } else {
+        // Turn off backlight after 20s
+        if ((millis() - backlightStart) > 20000) {
+            lcd.noDisplay();
+            lcd.noBacklight();
+            interactMode = false;
+            goSleep();
+        }
 
-    // Wait the interactions are finished before handle the watering
-    if (interactMode == false) {
-        handleWater();
+        // Wait the interactions are finished before handle the watering
+        if (interactMode == false) {
+            handleWater();
+        }
     }
 }
 
@@ -250,6 +256,8 @@ void handleButtonPlus() {
             saveParameters();
         } else if (menusPos == 7) {
             resetParameters();
+        } else if (menusPos == 8) {
+            testMode = !testMode;
         } else {
             subMenu = true;
         }
@@ -444,7 +452,7 @@ void setClock() {
     RTC.alarmInterrupt(ALARM_1, true);
 }
 
-//** Put the Atmega in sleep mode */
+//** Put the Atmega in sleep mode, wake up on an any intterupt */
 void goSleep() {
 
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
@@ -481,15 +489,17 @@ void handleWater() {
             goSleep();
         }
 
-        if ((zone1 == true && measures[0] < sensorZone1) 
+        if (valve == true && (zone1 == true && measures[0] < sensorZone1) 
             || (zone2 == true && measures[1] < sensorZone2) 
             || (zone3 == true && measures[2] < sensorZone3) 
             || (zone4 == true && measures[3] < sensorZone4)) {
-            digitalWrite(_pump, LOW);
+            digitalWrite(_pump, HIGH);
             handleZone(_valve1, zone1 == true && measures[0] < sensorZone1);
             handleZone(_valve1, zone2 == true && measures[1] < sensorZone2);
             handleZone(_valve2, zone3 == true && measures[2] < sensorZone3);
             handleZone(_valve4, zone4 == true && measures[3] < sensorZone4);
+        } else if () {
+            digitalWrite(_pump, HIGH);
         } else {
             stopAll();
             wateringStart = 0;
