@@ -5,6 +5,7 @@
 #include <avr/sleep.h> // Library for the sleep mode
 #include <Time.h>
 #include <TimeLib.h>
+#include "DHT.h"
 
 // #define SIZEOF_ARRAY(a) (sizeof(a) / sizeof( a[0] ))
 
@@ -14,8 +15,8 @@ const byte _buttonInterrupt = 3;
 const byte _pump = 4;
 const byte _valve1 = 5;
 const byte _valve2 = 6;
-const byte _valve3 = 7;
-const byte _valve4 = 8;
+const byte _fan = 7;
+const byte _window = 8;
 const byte _waterLevelSensor = 9;
 const byte _menuButton = 10;
 const byte _menuMinus = 11;
@@ -25,24 +26,26 @@ const byte _warningLed = 13;
 /** Analog Pins*/
 const byte _moistureSensor1 = A0;
 const byte _moistureSensor2 = A1;
-const byte _moistureSensor3 = A2;
-const byte _moistureSensor4 = A3;
+const byte _dhtSensor = A2;
 
 /** LCD */
 LiquidCrystal_I2C lcd(0x27,20,4);
+
+/** DHT22 */
+DHT dht(_dhtSensor, DHT22);
 
 /** Variables */
 byte pump;
 byte valve;
 byte waterSensor;
+byte fan;
+byte window;
 byte zone1;
 byte zone2;
-byte zone3;
-byte zone4;
 byte sensorZone1;
 byte sensorZone2;
-byte sensorZone3;
-byte sensorZone4;
+byte sensorHumidity;
+byte sensorTemp;
 byte menuHour;
 byte menuMinutes;
 byte clockHour;
@@ -65,17 +68,17 @@ typedef struct
 sub_menu_type menuHardware[] = {{ NULL, "Back...", 2, NULL},
                                 { 0, "Pump", 1, &pump},
                                 { 1, "Water sensor", 1, &waterSensor},
-                                { 2, "Valve", 1, &valve}};
+                                { 2, "Valve", 1, &valve},
+                                { 3, "Fan", 1, &fan},
+                                { 4, "Window", 1, &window}};
 sub_menu_type menuZones[] = {{ NULL, "Back...", 2, NULL},
                                 { 3, "Zone 1", 1, &zone1},
-                                { 4, "Zone 2", 1, &zone2},
-                                { 5, "Zone 3", 1, &zone3},
-                                { 6, "Zone 4", 1, &zone4}};
+                                { 4, "Zone 2", 1, &zone2}};
 sub_menu_type menuSensors[] = {{ NULL, "Back...", 2, NULL},
                                 { 7, "Zone 1", 0, &sensorZone1},
                                 { 8, "Zone 2", 0, &sensorZone2},
-                                { 9, "Zone 3", 0, &sensorZone3},
-                                { 10, "Zone 4", 0, &sensorZone4}};
+                                { 9, "Humidity", 0, &sensorHumidity},
+                                { 10, "Temperature", 0, &sensorTemp}};
 sub_menu_type menuTime[] = {{ NULL, "Back...", 2, NULL},
                             { 11, "menuHour", 0, &menuHour},
                             { 12, "menuMinutes", 0, &menuMinutes}};
@@ -105,16 +108,17 @@ menu_type menus[9] = {{"Hardwares", menuHardware, 4},
                         {"Reset", NULL, NULL},
                         {"Launch tests", NULL, NULL}};
 
-byte measures[4] = {0, 0, 0, 0};
+byte measuresMoisture[2] = {0, 0};
+float measuresHumTemp[2] = {0, 0};
 
 /** Global variables */
 volatile bool buttonPressed = false;
 volatile byte currentButton = 0;
+volatile bool watering = false;
 byte menusPos = 0;
 byte subMenuPos = 0;
 bool subMenu = false;
 bool editing = false;
-bool interactMode = true;
 bool testMode = false;
 unsigned long backlightStart = 0;
 unsigned long warningLedStart = 0;
@@ -145,19 +149,20 @@ void readButtons() {
 }
 
 /** Wake up the Atmega */
-void wakeUp() {
-    // Nothing to do for the moment
+void launchWatering() {
+    watering = true;
 }
 
 void setup() {
     Serial.begin(9600);
+    dht.begin();
 
     // Output pins
     pinMode(_pump, OUTPUT);
     pinMode(_valve1, OUTPUT);
     pinMode(_valve2, OUTPUT);
-    pinMode(_valve3, OUTPUT);
-    pinMode(_valve4, OUTPUT);
+    pinMode(_fan, OUTPUT);
+    pinMode(_window, OUTPUT);
     pinMode(_warningLed, OUTPUT);
 
     // Input pins
@@ -168,7 +173,7 @@ void setup() {
     pinMode(_buttonInterrupt, INPUT_PULLUP);
 
     // Interrupt pins
-    attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), wakeUp, RISING);
+    attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), launchWatering, RISING);
     attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, LOW);
 
     // Init values
@@ -210,14 +215,14 @@ void loop(){
         if ((millis() - backlightStart) > 20000) {
             lcd.noDisplay();
             lcd.noBacklight();
-            interactMode = false;
-            goSleep();
         }
 
-        // Wait the interactions are finished before handle the watering
-        if (interactMode == false) {
+        // Handle the watering
+        if (watering == true) {
             handleWater();
         }
+
+        handleFan();
     }
 }
 
@@ -227,7 +232,6 @@ void loop(){
 
 /** Handle button menu */
 void handleButtonMenu() {
-    interactMode = true;
 
     if (subMenu == false) {
         menusPos++;
@@ -349,9 +353,18 @@ void handleSubMenus(const sub_menu_type *subMenu) {
 
         if (menusPos == 2) {
             readMoistureSensors();
+            readHumidityTempSensor();
             lcd.setCursor(12, 1);
-            lcd.print(measures[subMenuPos - 1]);
-            lcd.print("%");
+            if (subMenuPos == 0 || subMenuPos == 1) {
+                lcd.print(measuresMoisture[subMenuPos - 1]);
+                lcd.print("%");
+            } else if (subMenuPos == 2) {
+                lcd.print(measuresHumTemp[0]);
+                lcd.print("%");
+            } else if (subMenuPos == 3) {
+                lcd.print(measuresHumTemp[1]);
+                lcd.print("*C");
+            }
         }
     } else {
         lcd.print(*(subMenu[subMenuPos].value) ? "ON" : "OFF");
@@ -376,12 +389,12 @@ void resetParameters() {
     waterSensor = 0;
     zone1 = 0;
     zone2 = 0;
-    zone3 = 0;
-    zone4 = 0;
+    fan = 0;
+    window = 0;
     sensorZone1 = 50;
     sensorZone2 = 50;
-    sensorZone3 = 50;
-    sensorZone4 = 50;
+    sensorHumidity = 50;
+    sensorTemp = 50;
     menuHour = 0;
     menuMinutes = 0;
     clockHour = 0;
@@ -457,18 +470,46 @@ void setClock() {
     RTC.alarmInterrupt(ALARM_1, true);
 }
 
-//** Put the Atmega in sleep mode, wake up on an any intterupt */
-void goSleep() {
+//////////////////////////////////////////////////////////
+//                    END DS3231                        //
+//////////////////////////////////////////////////////////
 
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-    sleep_enable();
-    sleep_mode();
-    sleep_disable();
-    RTC.alarm(ALARM_1);
+//////////////////////////////////////////////////////////
+//                    START FAN                         //
+//////////////////////////////////////////////////////////
+
+/** Extractor fan */
+void handleFan() {
+
+    readHumidityTempSensor();
+
+    if (measuresHumTemp[1] > sensorHumidity || measuresHumTemp[1] > sensorTemp) {
+        digitalWrite(_fan, HIGH);
+    } else {
+        digitalWrite(_fan, LOW);
+    }
+}
+
+/** Read values of DHT22
+    Reading temperature or humidity takes about 250 milliseconds */
+void readHumidityTempSensor() {
+    // Read humidity
+    measuresHumTemp[0] = dht.readHumidity();
+    // Read temperature
+    measuresHumTemp[1] = dht.readTemperature();
+        Serial.print(measuresHumTemp[0]);
+        Serial.println("%");
+        Serial.print(measuresHumTemp[1]);
+        Serial.println("*C");
+
+    // Check if any reads failed and exit early (to try again).
+    if (isnan(measuresHumTemp[0]) || isnan(measuresHumTemp[1])) {
+        Serial.println("Failed to read from DHT sensor!");
+    }
 }
 
 //////////////////////////////////////////////////////////
-//                    END DS3231                        //
+//                    END FAN                           //
 //////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////
@@ -485,31 +526,29 @@ void handleWater() {
 
     readMoistureSensors();
 
-    if (readWaterLevelSensor() == LOW || !waterSensor) {
+    if (readWaterLevelSensor() == HIGH || !waterSensor) {
         digitalWrite(_warningLed, LOW);
 
         // Time limit of watering
         if ((millis() - wateringStart) > (limit * 60000)) {
-            stopAll();
+            stopAllWatering();
             wateringStart = 0;
-            goSleep();
+            watering = false;
+            RTC.alarm(ALARM_1);
         }
 
-        if (valve == true && (zone1 == true && measures[0] < sensorZone1)
-            || (zone2 == true && measures[1] < sensorZone2)
-            || (zone3 == true && measures[2] < sensorZone3)
-            || (zone4 == true && measures[3] < sensorZone4)) {
+        if (valve == true && (zone1 == true && measuresMoisture[0] < sensorZone1)
+            || (zone2 == true && measuresMoisture[1] < sensorZone2)) {
             digitalWrite(_pump, HIGH);
-            handleZone(_valve1, zone1 == true && measures[0] < sensorZone1);
-            handleZone(_valve1, zone2 == true && measures[1] < sensorZone2);
-            handleZone(_valve2, zone3 == true && measures[2] < sensorZone3);
-            handleZone(_valve4, zone4 == true && measures[3] < sensorZone4);
+            handleZone(_valve1, zone1 == true && measuresMoisture[0] < sensorZone1);
+            handleZone(_valve2, zone2 == true && measuresMoisture[1] < sensorZone2);
         } else if (pump == true) {
             digitalWrite(_pump, HIGH);
         } else {
-            stopAll();
+            stopAllWatering();
             wateringStart = 0;
-            goSleep();
+            watering = false;
+            RTC.alarm(ALARM_1);
         }
     } else {
         // Warning led blinking
@@ -517,7 +556,8 @@ void handleWater() {
             digitalWrite(_warningLed, !digitalRead(_warningLed));
             warningLedStart = millis();
         }
-        stopAll();
+        stopAllWatering();
+        watering = false;
         wateringStart = 0;
     }
 }
@@ -534,10 +574,8 @@ void handleZone(const byte valve, const bool state) {
 
 /** Read the value of a moisture sensor */
 void readMoistureSensors() {
-    measures[0] = map(analogRead(_moistureSensor1), 1023, 0, 0, 100);
-    measures[1] = map(analogRead(_moistureSensor2), 1023, 0, 0, 100);
-    measures[2] = map(analogRead(_moistureSensor3), 1023, 0, 0, 100);
-    measures[3] = map(analogRead(_moistureSensor4), 1023, 0, 0, 100);
+    measuresMoisture[0] = map(analogRead(_moistureSensor1), 1023, 0, 0, 100);
+    measuresMoisture[1] = map(analogRead(_moistureSensor2), 1023, 0, 0, 100);
 }
 
 /** Read the value of the water level sensor */
@@ -545,13 +583,20 @@ int readWaterLevelSensor() {
     return digitalRead(_waterLevelSensor);
 }
 
+/** Stop all watering systems */
+void stopAllWatering() {
+    digitalWrite(_pump, LOW);
+    digitalWrite(_valve1, LOW);
+    digitalWrite(_valve2, LOW);
+}
+
 /** Stop all systems */
 void stopAll() {
     digitalWrite(_pump, LOW);
     digitalWrite(_valve1, LOW);
     digitalWrite(_valve2, LOW);
-    digitalWrite(_valve3, LOW);
-    digitalWrite(_valve4, LOW);
+    digitalWrite(_fan, LOW);
+    digitalWrite(_window, LOW);
 }
 
 //////////////////////////////////////////////////////////
@@ -577,10 +622,10 @@ void executeTest() {
     digitalWrite(_valve2, HIGH);
     delay(2000);
     digitalWrite(_valve2, LOW);
-    digitalWrite(_valve3, HIGH);
+    digitalWrite(_fan, HIGH);
     delay(2000);
-    digitalWrite(_valve3, LOW);
-    digitalWrite(_valve4, HIGH);
+    digitalWrite(_fan, LOW);
+    digitalWrite(_window, HIGH);
     delay(2000);
     stopAll();
 }
