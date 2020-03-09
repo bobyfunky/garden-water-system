@@ -480,18 +480,49 @@ void setClock() {
 //////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////
+//                    START WINDOW                      //
+//////////////////////////////////////////////////////////
+
+/** Window motor */
+void handleWindow() {
+
+    // If the window is activated
+    // if (window == true) {
+    //     readAnemometer();
+
+    //     if (windSpeed > sensorWind) {
+    //         digitalWrite(_window, HIGH);
+    //     } else {
+    //         digitalWrite(_window, LOW);
+    //     }
+    // }
+}
+
+/** Read value of the anemometer */
+void readAnemometer() {
+    // Empty
+}
+
+//////////////////////////////////////////////////////////
+//                    END WINDOW                        //
+//////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////
 //                    START FAN                         //
 //////////////////////////////////////////////////////////
 
 /** Extractor fan */
 void handleFan() {
 
-    readHumidityTempSensor();
+    // If the fan is activated
+    if (fan == true) {
+        readHumidityTempSensor();
 
-    if (measuresHumTemp[1] > sensorHumidity || measuresHumTemp[1] > sensorTemp) {
-        digitalWrite(_fan, HIGH);
-    } else {
-        digitalWrite(_fan, LOW);
+        if (measuresHumTemp[1] > sensorHumidity || measuresHumTemp[1] > sensorTemp) {
+            digitalWrite(_fan, HIGH);
+        } else {
+            digitalWrite(_fan, LOW);
+        }
     }
 }
 
@@ -542,9 +573,12 @@ void handleWater() {
             RTC.alarm(ALARM_1);
         }
 
+        // Handle per zone or directly with the pump
         if (valve == true && (zone1 == true && measuresMoisture[0] < sensorZone1)
             || (zone2 == true && measuresMoisture[1] < sensorZone2)) {
-            digitalWrite(_pump, HIGH);
+            if (pump == true) {
+                digitalWrite(_pump, HIGH);
+            }
             handleZone(_valve1, zone1 == true && measuresMoisture[0] < sensorZone1);
             handleZone(_valve2, zone2 == true && measuresMoisture[1] < sensorZone2);
         } else if (pump == true) {
@@ -615,24 +649,71 @@ void stopAll() {
 /** Test hardwares connections */
 void executeTest() {
     stopAll();
+
+    // Actuators
     digitalWrite(_warningLed, HIGH);
-    delay(2000);
+    delay(3000);
     digitalWrite(_warningLed, LOW);
     digitalWrite(_pump, HIGH);
-    delay(2000);
+    delay(3000);
     digitalWrite(_pump, LOW);
     digitalWrite(_valve1, HIGH);
-    delay(2000);
+    delay(3000);
     digitalWrite(_valve1, LOW);
     digitalWrite(_valve2, HIGH);
-    delay(2000);
+    delay(3000);
     digitalWrite(_valve2, LOW);
     digitalWrite(_fan, HIGH);
-    delay(2000);
+    delay(3000);
     digitalWrite(_fan, LOW);
     digitalWrite(_window, HIGH);
-    delay(2000);
+    delay(3000);
     stopAll();
+
+    // Sensors
+    // Humidity/temp sensor
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    readHumidityTempSensor();
+    lcd.print("Humidity");
+    lcd.setCursor(12, 0);
+    lcd.print(measuresHumTemp[0]);
+    lcd.print("%");
+    lcd.setCursor(0, 1);
+    lcd.print("Temperature");
+    lcd.setCursor(12, 1);
+    lcd.print(measuresHumTemp[1]);
+    lcd.print("*C");
+    delay(3000);
+    // Moisture sensor
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    readMoistureSensors();
+    lcd.print("Sensor zone 1");
+    lcd.setCursor(12, 0);
+    lcd.print(measuresMoisture[0]);
+    lcd.print("%");
+    lcd.setCursor(0, 1);
+    lcd.print("Sensor zone 2");
+    lcd.setCursor(12, 1);
+    lcd.print(measuresMoisture[1]);
+    lcd.print("%");
+    delay(3000);
+    // Water level sensor
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    readWaterLevelSensor();
+    lcd.print("Water level ");
+    if (readWaterLevelSensor() == HIGH) {
+        lcd.print("high");
+    } else {
+        lcd.print("low");
+    }
+    delay(3000);
+
+    // Stop the test mode and show the menu
+    testMode = !testMode;
+    displayScreen();
 }
 
 //////////////////////////////////////////////////////////
