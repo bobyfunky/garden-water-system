@@ -123,6 +123,7 @@ bool testMode = false;
 unsigned long backlightStart = 0;
 unsigned long warningLedStart = 0;
 unsigned long wateringStart = 0;
+unsigned long actionStart = 0;
 
 /** Read which button have been pressed */
 void readButtons() {
@@ -217,12 +218,16 @@ void loop(){
             lcd.noBacklight();
         }
 
-        // Handle the watering
-        if (watering == true) {
-            handleWater();
-        }
+        if ((millis() - actionStart) > 1000) {
+            actionStart = millis();
 
-        handleFan();
+            // Handle the watering
+            if (watering == true) {
+                handleWater();
+            }
+            // Handle the fan
+            handleFan();
+        }
     }
 }
 
@@ -497,10 +502,10 @@ void readHumidityTempSensor() {
     measuresHumTemp[0] = dht.readHumidity();
     // Read temperature
     measuresHumTemp[1] = dht.readTemperature();
-        Serial.print(measuresHumTemp[0]);
-        Serial.println("%");
-        Serial.print(measuresHumTemp[1]);
-        Serial.println("*C");
+    Serial.print(measuresHumTemp[0]);
+    Serial.println("%");
+    Serial.print(measuresHumTemp[1]);
+    Serial.println("*C");
 
     // Check if any reads failed and exit early (to try again).
     if (isnan(measuresHumTemp[0]) || isnan(measuresHumTemp[1])) {
@@ -532,8 +537,8 @@ void handleWater() {
         // Time limit of watering
         if ((millis() - wateringStart) > (limit * 60000)) {
             stopAllWatering();
-            wateringStart = 0;
             watering = false;
+            wateringStart = 0;
             RTC.alarm(ALARM_1);
         }
 
@@ -546,8 +551,8 @@ void handleWater() {
             digitalWrite(_pump, HIGH);
         } else {
             stopAllWatering();
-            wateringStart = 0;
             watering = false;
+            wateringStart = 0;
             RTC.alarm(ALARM_1);
         }
     } else {
@@ -590,6 +595,10 @@ void stopAllWatering() {
     digitalWrite(_valve2, LOW);
 }
 
+//////////////////////////////////////////////////////////
+//                    STOP WATER                        //
+//////////////////////////////////////////////////////////
+
 /** Stop all systems */
 void stopAll() {
     digitalWrite(_pump, LOW);
@@ -598,10 +607,6 @@ void stopAll() {
     digitalWrite(_fan, LOW);
     digitalWrite(_window, LOW);
 }
-
-//////////////////////////////////////////////////////////
-//                    STOP WATER                        //
-//////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////
 //                    START TESTS                       //
