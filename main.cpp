@@ -98,15 +98,16 @@ typedef struct
     byte length;
 } menu_type;
 
-menu_type menus[9] = {{"Hardwares", menuHardware, 4},
-                        {"Zones", menuZones, 5},
+menu_type menus[10] = {{"Hardwares", menuHardware, 6},
+                        {"Zones", menuZones, 3},
                         {"Sensors", menuSensors, 5},
                         {"Time", menuTime, 3},
                         {"Clock", menuClock, 4},
                         {"Delay", menuDelay, 2},
                         {"Save", NULL, NULL},
                         {"Reset", NULL, NULL},
-                        {"Launch tests", NULL, NULL}};
+                        {"Launch tests", NULL, NULL},
+                        {"Monitoring", NULL, NULL}};
 
 byte measuresMoisture[2] = {0, 0};
 float measuresHumTemp[2] = {0, 0};
@@ -120,6 +121,8 @@ byte subMenuPos = 0;
 bool subMenu = false;
 bool editing = false;
 bool testMode = false;
+bool monitoring = false;
+bool extracting = false;
 unsigned long backlightStart = 0;
 unsigned long warningLedStart = 0;
 unsigned long wateringStart = 0;
@@ -213,7 +216,7 @@ void loop(){
         executeTest();
     } else {
         // Turn off backlight after 20s
-        if ((millis() - backlightStart) > 20000) {
+        if (!monitoring && (millis() - backlightStart) > 20000) {
             lcd.noDisplay();
             lcd.noBacklight();
         }
@@ -240,7 +243,7 @@ void handleButtonMenu() {
 
     if (subMenu == false) {
         menusPos++;
-        if (menusPos >= 8) {
+        if (menusPos >= 10) {
             menusPos = 0;
         }
     } else {
@@ -264,6 +267,7 @@ void handleButtonPlus() {
             subMenu = false;
         } else if (menus[menusPos].subMenu[subMenuPos].type == 0) {
             *(menus[menusPos].subMenu[subMenuPos].value) += 1;
+            editing = true;
         } else {
             *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
        }
@@ -274,10 +278,12 @@ void handleButtonPlus() {
             resetParameters();
         } else if (menusPos == 8) {
             testMode = !testMode;
+        } else if (menusPos == 9) {
+            monitoring = !monitoring;
         } else {
             subMenu = true;
             editing = false;
-            subMenu = 0;
+            subMenuPos = 0;
         }
     }
     displayScreen();
@@ -287,6 +293,7 @@ void handleButtonPlus() {
 void handleButtonMinus() {
     if (menus[menusPos].subMenu[subMenuPos].type == 0) {
         *(menus[menusPos].subMenu[subMenuPos].value) -= 1;
+        editing = true;
     } else {
         *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
     }
@@ -359,15 +366,17 @@ void handleSubMenus(const sub_menu_type *subMenu) {
         if (menusPos == 2) {
             readMoistureSensors();
             readHumidityTempSensor();
-            lcd.setCursor(12, 1);
-            if (subMenuPos == 0 || subMenuPos == 1) {
+            if (subMenuPos == 1 || subMenuPos == 2) {
+                lcd.setCursor(12, 1);
                 lcd.print(measuresMoisture[subMenuPos - 1]);
                 lcd.print("%");
-            } else if (subMenuPos == 2) {
-                lcd.print(measuresHumTemp[0]);
-                lcd.print("%");
             } else if (subMenuPos == 3) {
-                lcd.print(measuresHumTemp[1]);
+                lcd.setCursor(10, 1);
+                lcd.print(measuresHumTemp[0], 1);
+                lcd.print("%");
+            } else if (subMenuPos == 4) {
+                lcd.setCursor(10, 1);
+                lcd.print(measuresHumTemp[1], 1);
                 lcd.print("*C");
             }
         }
@@ -518,10 +527,14 @@ void handleFan() {
     if (fan == true) {
         readHumidityTempSensor();
 
-        if (measuresHumTemp[1] > sensorHumidity || measuresHumTemp[1] > sensorTemp) {
+        if (measuresHumTemp[0] > sensorHumidity || measuresHumTemp[1] > sensorTemp) {
+            digitalWrite(_fan, HIGH);
+            extracting = true;
+        } else if (extracting && (measuresHumTemp[0] > sensorHumidity - 5 || measuresHumTemp[1] > sensorTemp - 5)) {
             digitalWrite(_fan, HIGH);
         } else {
             digitalWrite(_fan, LOW);
+            extracting = false;
         }
     }
 }
@@ -676,25 +689,25 @@ void executeTest() {
     lcd.setCursor(0, 0);
     readHumidityTempSensor();
     lcd.print("Humidity");
-    lcd.setCursor(12, 0);
-    lcd.print(measuresHumTemp[0]);
+    lcd.setCursor(10, 0);
+    lcd.print(measuresHumTemp[0], 1);
     lcd.print("%");
     lcd.setCursor(0, 1);
-    lcd.print("Temperature");
-    lcd.setCursor(12, 1);
-    lcd.print(measuresHumTemp[1]);
+    lcd.print("Temp");
+    lcd.setCursor(10, 1);
+    lcd.print(measuresHumTemp[1], 1);
     lcd.print("*C");
     delay(3000);
     // Moisture sensor
     lcd.clear();
     lcd.setCursor(0, 0);
     readMoistureSensors();
-    lcd.print("Sensor zone 1");
+    lcd.print("Sensor 1");
     lcd.setCursor(12, 0);
     lcd.print(measuresMoisture[0]);
     lcd.print("%");
     lcd.setCursor(0, 1);
-    lcd.print("Sensor zone 2");
+    lcd.print("Sensor 2");
     lcd.setCursor(12, 1);
     lcd.print(measuresMoisture[1]);
     lcd.print("%");
