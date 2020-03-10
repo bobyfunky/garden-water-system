@@ -215,8 +215,11 @@ void loop(){
     if (testMode) {
         executeTest();
     } else {
-        // Turn off backlight after 20s
-        if (!monitoring && (millis() - backlightStart) > 20000) {
+        // Show monitoring
+        if (monitoring) {
+            displayMonitoring();
+        } else if ((millis() - backlightStart) > 20000) {
+            // Turn off backlight after 20s
             lcd.noDisplay();
             lcd.noBacklight();
         }
@@ -383,6 +386,26 @@ void handleSubMenus(const sub_menu_type *subMenu) {
     } else {
         lcd.print(*(subMenu[subMenuPos].value) ? "ON" : "OFF");
     }
+}
+
+/** Display monitoring */
+void displayMonitoring() {
+    readMoistureSensors();
+    readHumidityTempSensor();
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(measuresMoisture[0]);
+    lcd.print("%");
+    lcd.setCursor(0, 1);
+    lcd.print(measuresMoisture[1]);
+    lcd.print("%");
+
+    lcd.setCursor(10, 0);
+    lcd.print(measuresHumTemp[0]);
+    lcd.print("%");
+    lcd.setCursor(10, 1);
+    lcd.print(measuresHumTemp[1]);
+    lcd.print("*C");
 }
 
 //////////////////////////////////////////////////////////
@@ -662,6 +685,9 @@ void stopAll() {
 /** Test hardwares connections */
 void executeTest() {
     stopAll();
+
+    lcd.setCursor(0, 1);
+    lcd.print("In progress...");
 
     // Actuators
     digitalWrite(_warningLed, HIGH);
