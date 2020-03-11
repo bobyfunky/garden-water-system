@@ -115,6 +115,7 @@ float measuresHumTemp[2] = {0, 0};
 /** Global variables */
 volatile bool buttonPressed = false;
 volatile byte currentButton = 0;
+volatile int lastStateEncoder = 0;
 volatile bool watering = false;
 byte menusPos = 0;
 byte subMenuPos = 0;
@@ -134,22 +135,46 @@ void readButtons() {
     static unsigned long lastInterruptTime = 0;
     unsigned long interruptTime = millis();
 
-    // If interrupts come faster than 200ms, assume it's a bounce and ignore
     if (interruptTime - lastInterruptTime > 200)
     {
-        buttonPressed = true;
-
         // Handle button Menu
-        int val = digitalRead(_menuButton);
-        currentButton = val == LOW ? 0 : currentButton;
-        // Handle button Plus
-        val = digitalRead(_menuPlus);
-        currentButton = val == LOW ? 1 : currentButton;
-        // Handle button Minus
-        val = digitalRead(_menuMinus);
-        currentButton = val == LOW ? 2 : currentButton;
-    }
+        if (digitalRead(_menuButton) == LOW) {
+            buttonPressed = true;
+            currentButton = 0;
+            return;
+        }
+
+        int state = digitalRead(_menuPlus);
+        // only if the value changed
+        if (state != lastStateEncoder && state == 1) {
+            // A button has been pressed
+            buttonPressed = true;
+            // _menuMinus value different from _menuPlus so the rotation is clockwise
+            currentButton = digitalRead(_menuMinus) != state ? 1 : 2;
+        }
+        lastStateEncoder = state;
+        }
     lastInterruptTime = interruptTime;
+
+    // static unsigned long lastInterruptTime = 0;
+    // unsigned long interruptTime = millis();
+
+    // // If interrupts come faster than 200ms, assume it's a bounce and ignore
+    // if (interruptTime - lastInterruptTime > 200)
+    // {
+    //     buttonPressed = true;
+
+    //     // Handle button Menu
+    //     int val = digitalRead(_menuButton);
+    //     currentButton = val == LOW ? 0 : currentButton;
+    //     // Handle button Plus
+    //     val = digitalRead(_menuPlus);
+    //     currentButton = val == LOW ? 1 : currentButton;
+    //     // Handle button Minus
+    //     val = digitalRead(_menuMinus);
+    //     currentButton = val == LOW ? 2 : currentButton;
+    // }
+    // lastInterruptTime = interruptTime;
 }
 
 /** Wake up the Atmega */
@@ -172,13 +197,16 @@ void setup() {
     // Input pins
     pinMode(_waterLevelSensor, INPUT_PULLUP);
     pinMode(_menuButton, INPUT_PULLUP);
-    pinMode(_menuMinus, INPUT_PULLUP);
-    pinMode(_menuPlus, INPUT_PULLUP);
+    pinMode(_menuMinus, INPUT);
+    pinMode(_menuPlus, INPUT);
     pinMode(_buttonInterrupt, INPUT_PULLUP);
 
     // Interrupt pins
     attachInterrupt(digitalPinToInterrupt(_alarmInterrupt), launchWatering, RISING);
-    attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, LOW);
+    attachInterrupt(digitalPinToInterrupt(_buttonInterrupt), readButtons, CHANGE);
+
+    // Init the last value of the rotary encoder
+    lastStateEncoder = digitalRead(_menuPlus);
 
     // Init values
     digitalWrite(_warningLed, LOW);
@@ -243,22 +271,6 @@ void loop(){
 /** Handle button menu */
 void handleButtonMenu() {
 
-    if (subMenu == false) {
-        menusPos++;
-        if (menusPos >= 10) {
-            menusPos = 0;
-        }
-    } else {
-        subMenuPos++;
-        if (subMenuPos >= menus[menusPos].length) {
-            subMenuPos = 0;
-        }
-    }
-    displayScreen();
-}
-
-/** Handle button plus */
-void handleButtonPlus() {
     if (subMenu) {
         if (subMenuPos == 0) {
             // When exit the time or clock submenu then set the values on the DS3231 board
@@ -267,12 +279,9 @@ void handleButtonPlus() {
                 setClock();
             }
             subMenu = false;
-        } else if (menus[menusPos].subMenu[subMenuPos].type == 0) {
-            *(menus[menusPos].subMenu[subMenuPos].value) += 1;
-            editing = true;
         } else {
-            *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
-       }
+            editing = !editing;
+        }
     } else {
         if (menusPos == 6) {
             saveParameters();
@@ -291,13 +300,52 @@ void handleButtonPlus() {
     displayScreen();
 }
 
+/** Handle button plus */
+void handleButtonPlus() {
+
+    if (editing) {
+        if (menus[menusPos].subMenu[subMenuPos].type == 0) {
+            *(menus[menusPos].subMenu[subMenuPos].value) += 1;
+        } else {
+            *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
+        }
+    } else {
+        if (subMenu) {
+            subMenuPos++;
+            if (subMenuPos >= menus[menusPos].length) {
+                subMenuPos = 0;
+            }
+        } else {
+            menusPos++;
+            if (menusPos >= 10) {
+                menusPos = 0;
+            }
+        }
+    }
+    displayScreen();
+}
+
 /** Handle button minus */
 void handleButtonMinus() {
-    if (menus[menusPos].subMenu[subMenuPos].type == 0) {
-        *(menus[menusPos].subMenu[subMenuPos].value) -= 1;
-        editing = true;
+
+    if (editing) {
+        if (menus[menusPos].subMenu[subMenuPos].type == 0) {
+            *(menus[menusPos].subMenu[subMenuPos].value) -= 1;
+        } else {
+            *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
+        }
     } else {
-        *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
+        if (subMenu) {
+            subMenuPos--;
+            if (subMenuPos < 0) {
+                subMenuPos = menus[menusPos].length - 1;
+            }
+        } else {
+            menusPos--;
+            if (menusPos < 0) {
+                menusPos = 9;
+            }
+        }
     }
     displayScreen();
 }
@@ -315,7 +363,7 @@ void handleInput() {
         handleButtonPlus();
     }
     // Handle button Minus
-    if (currentButton == 2 && subMenu == true && subMenuPos != 0) {
+    if (currentButton == 2) {
         handleButtonMinus();
     }
 }
@@ -418,6 +466,10 @@ void resetParameters() {
     subMenuPos = 0;
     subMenu = false;
     editing = false;
+    watering = false;
+    testMode = false;
+    monitoring = false;
+    extracting = false;
 
     // Variables
     pump = 0;
@@ -560,6 +612,7 @@ void handleFan() {
         }
     } else {
         digitalWrite(_fan, LOW);
+        extracting = false;
     }
 }
 
