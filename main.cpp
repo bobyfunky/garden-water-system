@@ -72,8 +72,8 @@ sub_menu_type menuHardware[] = {{ NULL, "Back...", 2, NULL},
                                 { 3, "Fan", 1, &fan},
                                 { 4, "Window", 1, &window}};
 sub_menu_type menuZones[] = {{ NULL, "Back...", 2, NULL},
-                                { 3, "Zone 1", 1, &zone1},
-                                { 4, "Zone 2", 1, &zone2}};
+                                { 5, "Zone 1", 1, &zone1},
+                                { 6, "Zone 2", 1, &zone2}};
 sub_menu_type menuSensors[] = {{ NULL, "Back...", 2, NULL},
                                 { 7, "Zone 1", 0, &sensorZone1},
                                 { 8, "Zone 2", 0, &sensorZone2},
@@ -126,7 +126,7 @@ bool extracting = false;
 unsigned long backlightStart = 0;
 unsigned long warningLedStart = 0;
 unsigned long wateringStart = 0;
-unsigned long actionStart = 0;
+unsigned long loopDelay = 0;
 
 /** Read which button have been pressed */
 void readButtons() {
@@ -208,13 +208,16 @@ void loop(){
 
     // True if a button have been pressed
     if (buttonPressed) {
+        monitoring = false;
         handleInput();
     }
 
     // True if the a test is running
     if (testMode) {
         executeTest();
-    } else {
+    } else if ((millis() - loopDelay) > 1000) {
+        loopDelay = millis();
+
         // Show monitoring
         if (monitoring) {
             displayMonitoring();
@@ -224,16 +227,12 @@ void loop(){
             lcd.noBacklight();
         }
 
-        if ((millis() - actionStart) > 1000) {
-            actionStart = millis();
-
-            // Handle the watering
-            if (watering == true) {
-                handleWater();
-            }
-            // Handle the fan
-            handleFan();
+        // Handle the watering
+        if (watering == true) {
+            handleWater();
         }
+        // Handle the fan
+        handleFan();
     }
 }
 
@@ -282,7 +281,7 @@ void handleButtonPlus() {
         } else if (menusPos == 8) {
             testMode = !testMode;
         } else if (menusPos == 9) {
-            monitoring = !monitoring;
+            monitoring = true;
         } else {
             subMenu = true;
             editing = false;
@@ -401,10 +400,10 @@ void displayMonitoring() {
     lcd.print("%");
 
     lcd.setCursor(10, 0);
-    lcd.print(measuresHumTemp[0]);
+    lcd.print(measuresHumTemp[0], 1);
     lcd.print("%");
     lcd.setCursor(10, 1);
-    lcd.print(measuresHumTemp[1]);
+    lcd.print(measuresHumTemp[1], 1);
     lcd.print("*C");
 }
 
@@ -559,6 +558,8 @@ void handleFan() {
             digitalWrite(_fan, LOW);
             extracting = false;
         }
+    } else {
+        digitalWrite(_fan, LOW);
     }
 }
 
