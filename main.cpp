@@ -243,22 +243,6 @@ void loop(){
 /** Handle button menu */
 void handleButtonMenu() {
 
-    if (subMenu == false) {
-        menusPos++;
-        if (menusPos >= 10) {
-            menusPos = 0;
-        }
-    } else {
-        subMenuPos++;
-        if (subMenuPos >= menus[menusPos].length) {
-            subMenuPos = 0;
-        }
-    }
-    displayScreen();
-}
-
-/** Handle button plus */
-void handleButtonPlus() {
     if (subMenu) {
         if (subMenuPos == 0) {
             // When exit the time or clock submenu then set the values on the DS3231 board
@@ -267,12 +251,9 @@ void handleButtonPlus() {
                 setClock();
             }
             subMenu = false;
-        } else if (menus[menusPos].subMenu[subMenuPos].type == 0) {
-            *(menus[menusPos].subMenu[subMenuPos].value) += 1;
-            editing = true;
         } else {
-            *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
-       }
+            editing = !editing;
+        }
     } else {
         if (menusPos == 6) {
             saveParameters();
@@ -291,13 +272,52 @@ void handleButtonPlus() {
     displayScreen();
 }
 
+/** Handle button plus */
+void handleButtonPlus() {
+
+    if (editing) {
+        if (menus[menusPos].subMenu[subMenuPos].type == 0) {
+            *(menus[menusPos].subMenu[subMenuPos].value) += 1;
+        } else {
+            *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
+        }
+    } else {
+        if (subMenu) {
+            menusPos++;
+            if (menusPos >= 10) {
+                menusPos = 0;
+            }
+        } else {
+            subMenuPos++;
+            if (subMenuPos >= menus[menusPos].length) {
+                subMenuPos = 0;
+            }
+        }
+    }
+    displayScreen();
+}
+
 /** Handle button minus */
 void handleButtonMinus() {
-    if (menus[menusPos].subMenu[subMenuPos].type == 0) {
-        *(menus[menusPos].subMenu[subMenuPos].value) -= 1;
-        editing = true;
+
+    if (editing) {
+        if (menus[menusPos].subMenu[subMenuPos].type == 0) {
+            *(menus[menusPos].subMenu[subMenuPos].value) -= 1;
+        } else {
+            *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
+        }
     } else {
-        *(menus[menusPos].subMenu[subMenuPos].value) = !*(menus[menusPos].subMenu[subMenuPos].value);
+        if (subMenu) {
+            menusPos--;
+            if (menusPos <= 0) {
+                menusPos = 10;
+            }
+        } else {
+            subMenuPos--;
+            if (subMenuPos <= 0) {
+                subMenuPos = menus[menusPos].length;
+            }
+        }
     }
     displayScreen();
 }
@@ -418,6 +438,10 @@ void resetParameters() {
     subMenuPos = 0;
     subMenu = false;
     editing = false;
+    watering = false;
+    testMode = false;
+    monitoring = false;
+    extracting = false;
 
     // Variables
     pump = 0;
@@ -560,6 +584,7 @@ void handleFan() {
         }
     } else {
         digitalWrite(_fan, LOW);
+        extracting = false;
     }
 }
 
